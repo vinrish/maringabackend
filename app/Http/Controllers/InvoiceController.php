@@ -182,7 +182,7 @@ class InvoiceController extends Controller
                     'amount' => $payment->amount,
                     'payment_method' => $payment->payment_method,
                     'transaction_reference' => $payment->transaction_reference,
-                    'date' => $payment->created_at,
+                    'date' => $payment->paid_at,
                 ];
             });
         });
@@ -283,7 +283,8 @@ class InvoiceController extends Controller
         $request->validate([
             'amount' => ['required', 'numeric', 'min:0.01'],
             'payment_method' => ['required', 'string', 'max:50'],
-            'transaction_reference' => ['nullable']
+            'transaction_reference' => ['nullable'],
+            'paid_at' => ['date']
         ]);
 
         $invoice = Invoice::with('feeNotes.payments')->findOrFail($invoiceId);
@@ -313,7 +314,8 @@ class InvoiceController extends Controller
                     $feeNote->payments()->create([
                         'amount' => $paidAmount,
                         'payment_method' => $request->payment_method,
-                        'transaction_reference' => $request->transaction_reference
+                        'transaction_reference' => $request->transaction_reference,
+                        'paid_at' => $request->paid_at
                     ]);
 
                     $paymentAmount -= $paidAmount;

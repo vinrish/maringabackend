@@ -18,7 +18,7 @@ class CompanyController extends Controller
      */
     public function index(Request $request)
     {
-        $this->authorize('viewAny', Company::class);
+//        $this->authorize('viewAny', Company::class);
 //        $user = auth()->user(); // Get the currently logged-in user
         $query = Company::query()->whereNull('deleted_at')->with('client.user');
 
@@ -129,7 +129,7 @@ class CompanyController extends Controller
      */
     public function create()
     {
-        $this->authorize('create', Company::class);
+//        $this->authorize('create', Company::class);
         $clients = Client::with(['user:id,first_name,last_name,middle_name'])
             ->whereNull('deleted_at') // Exclude soft-deleted clients if applicable
             ->get();
@@ -145,7 +145,7 @@ class CompanyController extends Controller
      */
     public function store(Request $request)
     {
-        $this->authorize('create', Company::class);
+//        $this->authorize('create', Company::class);
         // Validate the incoming request
         $request->validate([
             'name' => 'required|string',
@@ -215,7 +215,7 @@ class CompanyController extends Controller
      */
     public function show(Company $company)
     {
-        $this->authorize('view', $company);
+//        $this->authorize('view', $company);
         try {
             $company->load([
                 'client.user:id,first_name,last_name,phone,email,created_at',
@@ -313,7 +313,7 @@ class CompanyController extends Controller
      */
     public function edit(Company $company)
     {
-        $this->authorize('update', $company);
+//        $this->authorize('update', $company);
         // Retrieve the client with the related user details
         $client = $company->client()->with('user:id,first_name,last_name,middle_name')->first();
         $user = $client ? $client->user : null;
@@ -352,7 +352,7 @@ class CompanyController extends Controller
      */
     public function update(Request $request, Company $company)
     {
-        $this->authorize('update', $company);
+//        $this->authorize('update', $company);
         // Validate the incoming request
         $request->validate([
             'name' => 'sometimes|required|string',
@@ -526,6 +526,32 @@ class CompanyController extends Controller
             'total' => $companies->total(),
             'message' => 'success',
         ]);
+    }
+
+    public function restore($id): \Illuminate\Http\JsonResponse
+    {
+        try {
+            // Find the soft-deleted company
+            $company = Company::onlyTrashed()->find($id);
+
+            if (!$company) {
+                return response()->json(['message' => 'Company not found in recycle bin.'], 404);
+            }
+
+            // Restore the company
+            $company->restore();
+//            $company->employees()->restore();
+
+            return response()->json([
+                'message' => 'Company successfully restored!',
+                'company' => $company
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to restore company.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 
 //    public function destroy($id)

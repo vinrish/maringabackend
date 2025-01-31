@@ -72,6 +72,7 @@ Route::group(['middleware' => 'auth:api'], function () {
 
     //------------------------ COMPANIES ---------------------------------//
     Route::get('recycle-bin/companies', [CompanyController::class, 'recycleBin']);
+    Route::post('companies/{id}/restore', [CompanyController::class, 'restore']);
     Route::resource('companies', CompanyController::class);
 
     //------------------------ BUSINESSES ---------------------------------//

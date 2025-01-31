@@ -81,6 +81,7 @@ class PaymentController extends Controller
             'fee_note_id' => 'required|exists:fee_notes,id',
             'amount' => 'required|numeric|min:0',
             'transaction_reference' => 'nullable|string|max:255',
+            'paid_at' => 'nullable|date',
             'payment_method' => 'required|in:mpesa,cash,cheque,banktransfer',
 //            'status' => 'required|boolean',
         ]);
@@ -127,6 +128,7 @@ class PaymentController extends Controller
         $request->validate([
             'amount' => 'required|numeric|min:0',
             'transaction_reference' => 'nullable|string|max:255',
+            'paid_at' => 'nullable|date',
             'payment_method' => 'required|in:mpesa,cash,cheque,banktransfer',
             'status' => 'required|boolean',
         ]);

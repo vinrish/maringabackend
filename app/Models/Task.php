@@ -15,11 +15,18 @@ class Task extends Model
         'due_date',
         'status',
         'obligation_id',
+        'client_id',
+        'price'
     ];
 
     public function obligation()
     {
         return $this->belongsTo(Obligation::class, 'obligation_id');
+    }
+
+    public function client()
+    {
+        return $this->belongsTo(Client::class, 'client_id');
     }
 
     public function employees()

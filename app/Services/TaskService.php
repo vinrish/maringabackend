@@ -16,14 +16,16 @@ class TaskService
         return DB::transaction(function () use ($data) {
             $task = Task::create([
                 'name' => $data['name'],
-                'description' => $data['description'],
+//                'description' => $data['description'],
                 'due_date' => $data['due_date'],
-                'status' => $data['status'],
-                'obligation_id' => $data['obligation_id'],
+//                'status' => $data['status'],
+                'obligation_id' => $data['obligation_id'] ?? null,
+                'client_id' => $data['client_id'] ?? null,
+                'price' => $data['price'],
             ]);
 
             // Sync employees to the task
-            $task->employees()->syncWithoutDetaching($data['employee_ids']);
+            $task->employees()->attach($data['employee_ids']);
 
             // Store files for the task
             $this->storeFilesForTask($task, $data['files'] ?? []);

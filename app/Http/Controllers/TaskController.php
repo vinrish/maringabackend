@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\CompleteTaskJob;
+use App\Models\Client;
 use App\Models\Employee;
+use App\Models\Service;
 use App\Models\Task;
 use App\Services\TaskService;
 use Carbon\Carbon;
@@ -102,14 +104,36 @@ class TaskController extends Controller
         ]);
     }
 
+//    private function getTaskStatus(Task $task)
+//    {
+//        $today = Carbon::today();
+//        $nextRun = $task->obligation->next_run;
+//
+//        if ($task->status) {
+//            return 'complete';
+//        } elseif ($nextRun->isPast()) {
+//            return 'due';
+//        } elseif ($nextRun->isToday()) {
+//            return 'in_progress';
+//        } else {
+//            return 'upcoming';
+//        }
+//    }
     private function getTaskStatus(Task $task)
     {
         $today = Carbon::today();
-        $nextRun = $task->obligation->next_run;
 
         if ($task->status) {
             return 'complete';
-        } elseif ($nextRun->isPast()) {
+        }
+
+        if (!$task->obligation) {
+            return 'unknown';
+        }
+
+        $nextRun = $task->obligation->next_run;
+
+        if ($nextRun->isPast()) {
             return 'due';
         } elseif ($nextRun->isToday()) {
             return 'in_progress';
@@ -123,8 +147,10 @@ class TaskController extends Controller
      */
     public function create()
     {
+        $services = Service::select('id', 'name', 'price')->get();
+
         $employees = Employee::with('user:id,first_name,last_name,middle_name,phone')
-            ->select('id', 'user_id') // Assuming user_id links to the User model
+            ->select('id', 'user_id')
             ->get()
             ->map(function ($employee) {
                 return [
@@ -136,8 +162,23 @@ class TaskController extends Controller
                 ];
             });
 
+        $clients = Client::with('user:id,first_name,middle_name,last_name,phone')
+            ->select('id', 'user_id')
+            ->get()
+            ->map(function ($client) {
+                return [
+                    'id' => $client->id,
+                    'first_name' => $client->user->first_name,
+                    'last_name' => $client->user->last_name,
+                    'middle_name' => $client->user->middle_name,
+                    'phone' => $client->user->phone,
+                ];
+            });
+
         return response()->json([
+            'services' => $services,
             'employees' => $employees,
+            'clients' => $clients,
             'message' => 'Form data retrieved successfully',
         ], 200);
     }
@@ -150,12 +191,20 @@ class TaskController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'due_date' => 'required|date',
-            'status' => 'required|boolean',
-            'obligation_id' => 'required|exists:obligations,id',
+            'due_date' => 'nullable|date',
+            'status' => 'nullable|boolean',
+            'obligation_id' => 'nullable|exists:obligations,id',
+            'client_id' => 'nullable|exists:clients,id',
             'employee_ids' => 'required|array',
             'employee_ids.*' => 'exists:employees,id',
+            'price' => 'nullable|numeric',
         ]);
+
+        if (empty($validated['obligation_id']) && empty($validated['client_id'])) {
+            return response()->json([
+                'message' => 'Either obligation_id or client_id must be provided.'
+            ], 400);
+        }
 
         try {
             $task = $this->taskService->createTaskWithEmployees($validated);

@@ -127,8 +127,8 @@ class TaskController extends Controller
             return 'complete';
         }
 
-        if (!$task->obligation) {
-            return 'unknown';
+        if ($task->status === 0) {
+            return 'due';
         }
 
         $nextRun = $task->obligation->next_run;

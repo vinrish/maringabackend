@@ -46,7 +46,8 @@ class CompleteTaskJob implements ShouldQueue
             return;
         }
 
-//        $task->update(['status' => 1]);
+        $task->update(['status' => 1]);
+//        $task->update(['status' => true]);
 
         try {
             app('App\Services\TaskService')->createFeeNoteForTask($task);

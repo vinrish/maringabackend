@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Jobs\CompleteTaskJob;
 use App\Models\FeeNote;
 use App\Models\Obligation;
 use App\Models\Task;
@@ -16,22 +17,32 @@ class TaskService
         return DB::transaction(function () use ($data) {
             $task = Task::create([
                 'name' => $data['name'],
-//                'description' => $data['description'],
+                'description' => $data['description'] ?? null,
                 'due_date' => $data['due_date'],
-//                'status' => $data['status'],
+                'status' => false,
                 'obligation_id' => $data['obligation_id'] ?? null,
                 'client_id' => $data['client_id'] ?? null,
-                'price' => $data['price'],
+                'price' => $data['price'] ?? 0,
             ]);
 
             // Sync employees to the task
             $task->employees()->attach($data['employee_ids']);
 
-            // Store files for the task
-            $this->storeFilesForTask($task, $data['files'] ?? []);
+            // If the task is NOT part of an obligation (non-recurring), mark it as complete
+            if (!$task->obligation_id) {
+                $this->markTaskAsComplete($task);
+            }
 
             return $task;
         });
+    }
+
+    public function markTaskAsComplete(Task $task)
+    {
+//        dispatch(new CompleteTaskJob($task->id));
+        $this->createStandaloneFeeNote($task);
+        $task->update(['status' => 1]);
+//        Log::info("Task marked as completed", ['task_id' => $task->id]);
     }
 
 //    public function completeTask(Task $task)
@@ -149,8 +160,6 @@ class TaskService
     public function createFeeNoteForTask(Task $task)
     {
         // Retrieve the obligation associated with the task
-        $obligation = $task->obligation;
-
         if ($obligation) {
             // Retrieve the service associated with the task name
             $serviceWithPrice = DB::table('services')
@@ -195,7 +204,7 @@ class TaskService
                 // Create a new fee note for this task and service
                 FeeNote::create([
                     'task_id' => $task->id,
-                    'client_id' => $obligation->client_id,
+                    'client_id' => $obligation->client_id ?? $task->client_id,
                     'company_id' => $obligation->company_id,
                     'amount' => $serviceWithPrice->service_price,
                     'status' => '0',
@@ -222,8 +231,41 @@ class TaskService
                     'error' => $e->getMessage(),
                 ]);
             }
-        } else {
-            Log::warning('Obligation not found for task', ['task_id' => $task->id]);
+        }
+    }
+
+    private function createStandaloneFeeNote(Task $task)
+    {
+        Log::info('Creating standalone fee note for task', ['task_id' => $task->id]);
+
+        $existingFeeNote = FeeNote::where('task_id', $task->id)->first();
+        if ($existingFeeNote) {
+            Log::info('Standalone fee note already exists', ['task_id' => $task->id]);
+            return;
+        }
+
+        DB::beginTransaction();
+        try {
+            $feeNote = FeeNote::create([
+                'task_id' => $task->id,
+                'client_id' => $task->client_id,
+                'company_id' => $task->company_id,
+                'amount' => $task->price ?? 0, // Ensure price exists
+                'status' => '0',
+            ]);
+
+            Log::info('Standalone fee note created', [
+                'task_id' => $task->id,
+                'fee_note_id' => $feeNote->id
+            ]);
+
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Failed to create standalone fee note', [
+                'task_id' => $task->id,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 

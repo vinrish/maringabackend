@@ -48,6 +48,31 @@ Route::get('/process-queue', function () {
     return response()->json(['status' => 'Queue processed successfully']);
 });
 
+Route::get('/clean-names', function () {
+    Artisan::call('tasks:clean-names');
+    return response()->json([
+        'message' => 'Update Names process started!',
+        'output' => Artisan::output(),
+    ]);
+});
+
+
+Route::get('/update-names', function () {
+    Artisan::call('tasks:update-names');
+    return response()->json([
+        'message' => 'Update Names process started!',
+        'output' => Artisan::output(),
+    ]);
+});
+
+Route::get('/generate-feenotes', function () {
+    Artisan::call('tasks:generate-feenotes');
+    return response()->json([
+        'message' => 'Fee notes generation process started!',
+        'output' => Artisan::output(),
+    ]);
+});
+
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 

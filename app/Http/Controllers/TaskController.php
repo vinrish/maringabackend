@@ -50,7 +50,7 @@ class TaskController extends Controller
         $status = $request->input('status');
 
         // Initialize the query with relationships
-        $tasksQuery = Task::with(['obligation', 'employees.user']);
+        $tasksQuery = Task::with(['obligation', 'obligation.client.user', 'obligation.company', 'client.user', 'employees.user']);
 
         // Search functionality (e.g., search by task name or obligation fields)
         if ($searchTerm) {

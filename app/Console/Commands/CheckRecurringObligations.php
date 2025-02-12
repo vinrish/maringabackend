@@ -52,7 +52,7 @@ class CheckRecurringObligations extends Command
 
             // Create a task for the obligation
             $this->taskService->createTaskWithEmployees([
-                'name' => $obligation->name . ' Task',
+                'name' => $obligation->name,
                 'description' => $obligation->description,
                 'due_date' => $obligation->next_run,
                 'status' => false,

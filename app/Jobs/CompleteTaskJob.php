@@ -34,10 +34,15 @@ class CompleteTaskJob implements ShouldQueue
      */
     public function handle(): void
     {
-        $task = Task::find($this->taskId);
+        $task = Task::with('obligation')->find($this->taskId);
 
         if (!$task) {
             Log::warning('Task not found', ['task_id' => $this->taskId]);
+            return;
+        }
+
+        if (!$task->obligation) {
+            Log::warning('Obligation not found for task', ['task_id' => $this->taskId]);
             return;
         }
 
@@ -46,7 +51,7 @@ class CompleteTaskJob implements ShouldQueue
             return;
         }
 
-        $task->update(['status' => 1]);
+//        $task->update(['status' => 1]);
 //        $task->update(['status' => true]);
 
         try {

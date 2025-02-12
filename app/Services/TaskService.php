@@ -26,7 +26,7 @@ class TaskService
             ]);
 
             // Sync employees to the task
-            $task->employees()->attach($data['employee_ids']);
+            $task->employees()->syncWithoutDetaching($data['employee_ids']);
 
             // If the task is NOT part of an obligation (non-recurring), mark it as complete
             if (!$task->obligation_id) {
@@ -159,78 +159,85 @@ class TaskService
 
     public function createFeeNoteForTask(Task $task)
     {
+        Log::info('Checking obligation for task', ['task_id' => $task->id, 'obligation_id' => $task->obligation_id]);
+
+        $obligation = $task->obligation;
+
+        if (!$obligation) {
+            Log::warning('Obligation not found for task', ['task_id' => $task->id]);
+            return;
+        }
+
         // Retrieve the obligation associated with the task
-        if ($obligation) {
-            // Retrieve the service associated with the task name
-            $serviceWithPrice = DB::table('services')
-                ->join('obligation_service', 'obligation_service.service_id', '=', 'services.id')
-                ->where('obligation_service.obligation_id', $obligation->id)
-                ->where('services.name', $task->name) // Match the service name to the task name
-                ->select(
-                    'services.id as service_id',
-                    'services.name as service_name',
-                    'obligation_service.price as service_price'
-                )
+        // Retrieve the service associated with the task name
+        $serviceWithPrice = DB::table('services')
+            ->join('obligation_service', 'obligation_service.service_id', '=', 'services.id')
+            ->where('obligation_service.obligation_id', $obligation->id)
+            ->where('services.name', $task->name) // Match the service name to the task name
+            ->select(
+                'services.id as service_id',
+                'services.name as service_name',
+                'obligation_service.price as service_price'
+            )
+            ->first();
+
+        if (!$serviceWithPrice) {
+            Log::warning('No matching service found for task', [
+                'task_id' => $task->id,
+                'task_name' => $task->name,
+                'obligation_id' => $obligation->id,
+            ]);
+            return;
+        }
+
+        // Start a database transaction
+        DB::beginTransaction();
+        try {
+            // Check if a fee note already exists for this task and service
+            $existingFeeNote = FeeNote::where('task_id', $task->id)
+                ->where('client_id', $obligation->client_id)
+                ->where('company_id', $obligation->company_id)
+                ->where('amount', $serviceWithPrice->service_price)
                 ->first();
 
-            if (!$serviceWithPrice) {
-                Log::warning('No matching service found for task', [
+            if ($existingFeeNote) {
+                Log::info('Fee note already exists for task and service', [
                     'task_id' => $task->id,
-                    'task_name' => $task->name,
-                    'obligation_id' => $obligation->id,
+                    'service_id' => $serviceWithPrice->service_id,
                 ]);
+                DB::rollBack(); // Rollback as we do not proceed if a fee note already exists
                 return;
             }
 
-            // Start a database transaction
-            DB::beginTransaction();
-            try {
-                // Check if a fee note already exists for this task and service
-                $existingFeeNote = FeeNote::where('task_id', $task->id)
-                    ->where('client_id', $obligation->client_id)
-                    ->where('company_id', $obligation->company_id)
-                    ->where('amount', $serviceWithPrice->service_price)
-                    ->first();
+            // Create a new fee note for this task and service
+            FeeNote::create([
+                'task_id' => $task->id,
+                'client_id' => $obligation->client_id ?? $task->client_id,
+                'company_id' => $obligation->company_id,
+                'amount' => $serviceWithPrice->service_price,
+                'status' => '0',
+            ]);
 
-                if ($existingFeeNote) {
-                    Log::info('Fee note already exists for task and service', [
-                        'task_id' => $task->id,
-                        'service_id' => $serviceWithPrice->service_id,
-                    ]);
-                    DB::rollBack(); // Rollback as we do not proceed if a fee note already exists
-                    return;
-                }
+            Log::info('Fee note created for task and service', [
+                'task_id' => $task->id,
+                'service_id' => $serviceWithPrice->service_id,
+                'service_name' => $serviceWithPrice->service_name,
+                'amount' => $serviceWithPrice->service_price,
+            ]);
 
-                // Create a new fee note for this task and service
-                FeeNote::create([
-                    'task_id' => $task->id,
-                    'client_id' => $obligation->client_id ?? $task->client_id,
-                    'company_id' => $obligation->company_id,
-                    'amount' => $serviceWithPrice->service_price,
-                    'status' => '0',
-                ]);
+            // Update task status to 1 (completed)
+            $task->update(['status' => 1]);
 
-                Log::info('Fee note created for task and service', [
-                    'task_id' => $task->id,
-                    'service_id' => $serviceWithPrice->service_id,
-                    'service_name' => $serviceWithPrice->service_name,
-                    'amount' => $serviceWithPrice->service_price,
-                ]);
-
-                // Update task status to 1 (completed)
-                $task->update(['status' => 1]);
-
-                // Commit the transaction
-                DB::commit();
-            } catch (\Exception $e) {
-                // Rollback transaction in case of failure
-                DB::rollBack();
-                Log::error('Failed to create fee note for task', [
-                    'task_id' => $task->id,
-                    'service_id' => $serviceWithPrice->service_id,
-                    'error' => $e->getMessage(),
-                ]);
-            }
+            // Commit the transaction
+            DB::commit();
+        } catch (\Exception $e) {
+            // Rollback transaction in case of failure
+            DB::rollBack();
+            Log::error('Failed to create fee note for task', [
+                'task_id' => $task->id,
+                'service_id' => $serviceWithPrice->service_id,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 
